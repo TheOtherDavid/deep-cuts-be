@@ -5,6 +5,7 @@ import (
 	"fmt"
 	spotifyauth "github.com/zmb3/spotify/v2/auth"
 	"log"
+	"math/rand"
 	"net/http"
 	"os"
 
@@ -49,10 +50,13 @@ func main() {
 		originalTracks := getFullTracksFromPlaylist(ctx, client, playlist)
 		fmt.Println("Tracks retrieved:", originalTracks)
 
-		finalTracks := getFinalPlaylistTracks(ctx, client, originalTracks)
+		programMode := os.Getenv("PROGRAM_MODE")
+
+		finalTracks := getFinalPlaylistTracks(ctx, client, originalTracks, programMode)
 		//Create playlist
 		createPlaylist(ctx, client, user, finalTracks)
 
+		os.Exit(0)
 	}()
 
 	http.ListenAndServe(":8080", nil)
@@ -137,7 +141,7 @@ func createPlaylist(ctx context.Context, client *spotify.Client, user *spotify.P
 
 }
 
-func getFinalPlaylistTracks(ctx context.Context, client *spotify.Client, originalTracks []spotify.FullTrack) []spotify.SimpleTrack {
+func getFinalPlaylistTracks(ctx context.Context, client *spotify.Client, originalTracks []spotify.FullTrack, programMode string) []spotify.SimpleTrack {
 	finalTracks := []spotify.SimpleTrack{}
 
 	for _, originalTrack := range originalTracks {
@@ -145,11 +149,23 @@ func getFinalPlaylistTracks(ctx context.Context, client *spotify.Client, origina
 		albumId := originalTrack.Album.ID
 		album := getAlbum(ctx, client, albumId)
 		fmt.Println("Album retrieved:", album)
-
-		//For each track on the album, add it to the final list if it isn't the original track
-		for _, albumTrack := range album.Tracks.Tracks {
-			if albumTrack.ID != originalTrack.SimpleTrack.ID {
-				finalTracks = append(finalTracks, albumTrack)
+		switch programMode {
+		case "ALL_BUT_ORIGINAL":
+			//For each track on the album, add it to the final list if it isn't the original track
+			for _, albumTrack := range album.Tracks.Tracks {
+				if albumTrack.ID != originalTrack.SimpleTrack.ID {
+					finalTracks = append(finalTracks, albumTrack)
+				}
+			}
+		case "ONE_TRACK_PER_TRACK":
+			//For each track on the album, add it to the final list if it isn't the original track
+			trackNumber := rand.Int() % len(album.Tracks.Tracks)
+			if album.Tracks.Tracks[trackNumber].ID != originalTrack.SimpleTrack.ID {
+				finalTracks = append(finalTracks, album.Tracks.Tracks[trackNumber])
+			} else if trackNumber != 0 {
+				finalTracks = append(finalTracks, album.Tracks.Tracks[trackNumber-1])
+			} else {
+				finalTracks = append(finalTracks, album.Tracks.Tracks[trackNumber+1])
 			}
 		}
 	}
