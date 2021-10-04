@@ -6,6 +6,7 @@ import (
 	spotifyauth "github.com/zmb3/spotify/v2/auth"
 	"log"
 	"net/http"
+	"os"
 
 	"github.com/zmb3/spotify/v2"
 )
@@ -40,7 +41,7 @@ func main() {
 		}
 		fmt.Println("You are logged in as:", user.ID)
 		ctx := context.Background()
-		playlistId := spotify.ID("0QtOJvw6RiZViCT3FTFW9r")
+		playlistId := spotify.ID(os.Getenv("SPOTIFY_PLAYLIST_ID"))
 		//Get input playlist
 		playlist := getPlaylist(ctx, client, playlistId)
 		fmt.Println("Playlist retrieved:", playlist)
@@ -48,22 +49,7 @@ func main() {
 		originalTracks := getFullTracksFromPlaylist(ctx, client, playlist)
 		fmt.Println("Tracks retrieved:", originalTracks)
 
-		finalTracks := []spotify.SimpleTrack{}
-
-		for _, originalTrack := range originalTracks {
-			//Get album for each track, and the tracks from those albums
-			albumId := originalTrack.Album.ID
-			album := getAlbum(ctx, client, albumId)
-			fmt.Println("Album retrieved:", album)
-
-			//For each track on the album, add it to the final list if it isn't the original track
-			for _, albumTrack := range album.Tracks.Tracks {
-				if albumTrack.ID != originalTrack.SimpleTrack.ID {
-					finalTracks = append(finalTracks, albumTrack)
-				}
-			}
-		}
-
+		finalTracks := getFinalPlaylistTracks(ctx, client, originalTracks)
 		//Create playlist
 		createPlaylist(ctx, client, user, finalTracks)
 
@@ -147,5 +133,25 @@ func createPlaylist(ctx context.Context, client *spotify.Client, user *spotify.P
 	if err != nil {
 		fmt.Println(err.Error)
 	}
+	fmt.Println("Playlist created")
 
+}
+
+func getFinalPlaylistTracks(ctx context.Context, client *spotify.Client, originalTracks []spotify.FullTrack) []spotify.SimpleTrack {
+	finalTracks := []spotify.SimpleTrack{}
+
+	for _, originalTrack := range originalTracks {
+		//Get album for each track, and the tracks from those albums
+		albumId := originalTrack.Album.ID
+		album := getAlbum(ctx, client, albumId)
+		fmt.Println("Album retrieved:", album)
+
+		//For each track on the album, add it to the final list if it isn't the original track
+		for _, albumTrack := range album.Tracks.Tracks {
+			if albumTrack.ID != originalTrack.SimpleTrack.ID {
+				finalTracks = append(finalTracks, albumTrack)
+			}
+		}
+	}
+	return finalTracks
 }
