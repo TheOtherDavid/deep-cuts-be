@@ -5,7 +5,6 @@ import (
 	"fmt"
 	spotifyauth "github.com/zmb3/spotify/v2/auth"
 	"log"
-	"math/rand"
 	"net/http"
 	"os"
 
@@ -98,7 +97,6 @@ func getFullTracksFromPlaylist(ctx context.Context, client *spotify.Client, play
 	playlistTracks := playlist.Tracks.Tracks
 	for _, playlistTrack := range playlistTracks {
 		tracks = append(tracks, playlistTrack.Track)
-
 	}
 	return tracks
 }
@@ -143,31 +141,51 @@ func createPlaylist(ctx context.Context, client *spotify.Client, user *spotify.P
 
 func getFinalPlaylistTracks(ctx context.Context, client *spotify.Client, originalTracks []spotify.FullTrack, programMode string) []spotify.SimpleTrack {
 	finalTracks := []spotify.SimpleTrack{}
+	forbiddenSongs := []spotify.SimpleTrack{}
+
+	//First we add every item on the list to the forbiddenSongs list
+	for _, originalTrack := range originalTracks {
+		forbiddenSongs = append(forbiddenSongs, originalTrack.SimpleTrack)
+	}
 
 	for _, originalTrack := range originalTracks {
 		//Get album for each track, and the tracks from those albums
 		albumId := originalTrack.Album.ID
 		album := getAlbum(ctx, client, albumId)
 		fmt.Println("Album retrieved:", album)
+		albumTracklist := album.Tracks.Tracks
 		switch programMode {
 		case "ALL_BUT_ORIGINAL":
 			//For each track on the album, add it to the final list if it isn't the original track
-			for _, albumTrack := range album.Tracks.Tracks {
+			for _, albumTrack := range albumTracklist {
 				if albumTrack.ID != originalTrack.SimpleTrack.ID {
 					finalTracks = append(finalTracks, albumTrack)
 				}
 			}
 		case "ONE_TRACK_PER_TRACK":
-			//For each track on the album, add it to the final list if it isn't the original track
-			trackNumber := rand.Int() % len(album.Tracks.Tracks)
-			if album.Tracks.Tracks[trackNumber].ID != originalTrack.SimpleTrack.ID {
-				finalTracks = append(finalTracks, album.Tracks.Tracks[trackNumber])
-			} else if trackNumber != 0 {
-				finalTracks = append(finalTracks, album.Tracks.Tracks[trackNumber-1])
-			} else {
-				finalTracks = append(finalTracks, album.Tracks.Tracks[trackNumber+1])
+			//Go through the rest of the album's tracks and test for acceptable songs (which order?)
+			for _, albumTrack := range albumTracklist {
+				if !isSongIDForbidden(forbiddenSongs, albumTrack) {
+					finalTracks = append(finalTracks, albumTrack)
+					//Also add the selected song to the forbidden list, so it doesn't get chosen again.
+					forbiddenSongs = append(forbiddenSongs, albumTrack)
+					break
+				}
 			}
 		}
 	}
 	return finalTracks
+}
+
+func isSongIDForbidden(forbiddenSongs []spotify.SimpleTrack, song spotify.SimpleTrack) bool {
+	return contains(forbiddenSongs, song)
+}
+
+func contains(s []spotify.SimpleTrack, e spotify.SimpleTrack) bool {
+	for _, a := range s {
+		if a.ID == e.ID {
+			return true
+		}
+	}
+	return false
 }
