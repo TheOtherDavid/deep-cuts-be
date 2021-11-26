@@ -158,7 +158,7 @@ func getFinalPlaylistTracks(ctx context.Context, client *spotify.Client, origina
 		case "ALL_BUT_ORIGINAL":
 			//For each track on the album, add it to the final list if it isn't the original track
 			for _, albumTrack := range albumTracklist {
-				if albumTrack.ID != originalTrack.SimpleTrack.ID {
+				if !isSongIDForbidden(forbiddenSongs, albumTrack) {
 					finalTracks = append(finalTracks, albumTrack)
 				}
 			}
