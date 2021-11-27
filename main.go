@@ -5,10 +5,12 @@ import (
 	"fmt"
 	spotifyauth "github.com/zmb3/spotify/v2/auth"
 	"log"
+	"math/rand"
 	"net/http"
 	"os"
 
 	"github.com/zmb3/spotify/v2"
+	"time"
 )
 
 const redirectURI = "http://localhost:8080/callback"
@@ -28,6 +30,7 @@ func main() {
 	http.HandleFunc("/callback", completeAuth)
 
 	go func() {
+		rand.Seed(time.Now().UnixNano())
 		url := auth.AuthURL(state)
 		fmt.Println("Please log in to Spotify by visiting the following page in your browser:", url)
 
@@ -164,13 +167,11 @@ func getFinalPlaylistTracks(ctx context.Context, client *spotify.Client, origina
 			}
 		case "ONE_TRACK_PER_TRACK":
 			//Go through the rest of the album's tracks and test for acceptable songs (which order?)
-			for _, albumTrack := range albumTracklist {
-				if !isSongIDForbidden(forbiddenSongs, albumTrack) {
-					finalTracks = append(finalTracks, albumTrack)
-					//Also add the selected song to the forbidden list, so it doesn't get chosen again.
-					forbiddenSongs = append(forbiddenSongs, albumTrack)
-					break
-				}
+			//Figure out acceptable songs
+			acceptableTracks := findAcceptableTracks(albumTracklist, forbiddenSongs)
+			if len(acceptableTracks) > 0 {
+				trackIndex := rand.Int() % len(acceptableTracks)
+				finalTracks = append(finalTracks, albumTracklist[trackIndex])
 			}
 		}
 	}
@@ -188,4 +189,24 @@ func contains(s []spotify.SimpleTrack, e spotify.SimpleTrack) bool {
 		}
 	}
 	return false
+}
+
+func findAcceptableTracks(potentialTracks []spotify.SimpleTrack, forbiddenTracks []spotify.SimpleTrack) []spotify.SimpleTrack {
+	acceptableTracks := []spotify.SimpleTrack{}
+	//Loop through list One
+	for _, potentialTrack := range potentialTracks {
+		addTrack := true
+		//Loop through list Two
+		for _, forbiddenTrack := range forbiddenTracks {
+			if potentialTrack.ID == forbiddenTrack.ID {
+				//If an item in the potentialTrack exists in the forbiddenTrack list, do not add it to the acceptableTrack list.
+				addTrack = false
+				break
+			}
+		}
+		if addTrack == true {
+			acceptableTracks = append(acceptableTracks, potentialTrack)
+		}
+	}
+	return acceptableTracks
 }
