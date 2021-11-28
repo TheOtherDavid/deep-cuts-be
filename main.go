@@ -8,6 +8,7 @@ import (
 	"math/rand"
 	"net/http"
 	"os"
+	"strconv"
 
 	"github.com/zmb3/spotify/v2"
 	"time"
@@ -47,10 +48,10 @@ func main() {
 		playlistId := spotify.ID(os.Getenv("SPOTIFY_PLAYLIST_ID"))
 		//Get input playlist
 		playlist := getPlaylist(ctx, client, playlistId)
-		fmt.Println("Playlist retrieved:", playlist)
+		fmt.Println("Playlist retrieved.")
 		//Get each track
 		originalTracks := getFullTracksFromPlaylist(ctx, client, playlist)
-		fmt.Println("Tracks retrieved:", originalTracks)
+		fmt.Println("Tracks retrieved.")
 
 		programMode := os.Getenv("PROGRAM_MODE")
 
@@ -84,14 +85,29 @@ func completeAuth(w http.ResponseWriter, r *http.Request) {
 
 func getPlaylist(ctx context.Context, client *spotify.Client, playlistId spotify.ID) *spotify.FullPlaylist {
 	fmt.Println("Beginning getPlaylist")
+	finalPlaylist := spotify.FullPlaylist{}
 
-	playlist, err := client.GetPlaylist(ctx, playlistId)
+	offset := 0
+	limit := 100
 
-	if err != nil {
-		fmt.Println(err.Error)
+	for {
+		spotifyOffset := spotify.Offset(offset)
+		playlist, err := client.GetPlaylist(ctx, playlistId, spotifyOffset, spotify.Limit(limit))
+
+		if err != nil {
+			fmt.Println(err.Error)
+		}
+		fmt.Println(playlist.ID)
+
+		finalPlaylist.Tracks.Tracks = append(finalPlaylist.Tracks.Tracks, playlist.Tracks.Tracks...)
+
+		if playlist.Tracks.Total <= offset+limit {
+			break
+		}
+		offset = offset + limit
 	}
-	fmt.Println(playlist.ID)
-	return playlist
+
+	return &finalPlaylist
 }
 
 func getFullTracksFromPlaylist(ctx context.Context, client *spotify.Client, playlist *spotify.FullPlaylist) []spotify.FullTrack {
@@ -134,10 +150,23 @@ func createPlaylist(ctx context.Context, client *spotify.Client, user *spotify.P
 	for _, track := range tracks {
 		trackIds = append(trackIds, track.ID)
 	}
-	_, err = client.AddTracksToPlaylist(ctx, playlistId, trackIds...)
-	if err != nil {
-		fmt.Println(err.Error)
+	//TODO: This can only take 100 records at a time. How should we batch it?
+	size := 100
+	var j int
+
+	for i := 0; i < len(trackIds); i += size {
+		j += size
+		if j > len(trackIds) {
+			j = len(trackIds)
+		}
+		// do what do you want to with the sub-slice, here just printing the sub-slices
+		fmt.Println(trackIds[i:j])
+		_, err = client.AddTracksToPlaylist(ctx, playlistId, trackIds[i:j]...)
+		if err != nil {
+			fmt.Println(err.Error)
+		}
 	}
+
 	fmt.Println("Playlist created")
 
 }
@@ -151,11 +180,11 @@ func getFinalPlaylistTracks(ctx context.Context, client *spotify.Client, origina
 		forbiddenSongs = append(forbiddenSongs, originalTrack.SimpleTrack)
 	}
 
-	for _, originalTrack := range originalTracks {
+	for i, originalTrack := range originalTracks {
 		//Get album for each track, and the tracks from those albums
 		albumId := originalTrack.Album.ID
 		album := getAlbum(ctx, client, albumId)
-		fmt.Println("Album retrieved:", album)
+		fmt.Println("Album retrieved: " + strconv.Itoa(i))
 		albumTracklist := album.Tracks.Tracks
 		switch programMode {
 		case "ALL_BUT_ORIGINAL":
@@ -172,6 +201,7 @@ func getFinalPlaylistTracks(ctx context.Context, client *spotify.Client, origina
 			if len(acceptableTracks) > 0 {
 				trackIndex := rand.Int() % len(acceptableTracks)
 				finalTracks = append(finalTracks, albumTracklist[trackIndex])
+				forbiddenSongs = append(forbiddenSongs, albumTracklist[trackIndex])
 			}
 		}
 	}
