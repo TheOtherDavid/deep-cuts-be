@@ -5,38 +5,26 @@ import (
 	"encoding/json"
 	"fmt"
 	"github.com/gorilla/mux"
-	spotifyauth "github.com/zmb3/spotify/v2/auth"
 	"log"
 	"math/rand"
 	"net/http"
 	"os"
 	"strconv"
 
-	"github.com/zmb3/spotify/v2"
-	"time"
-)
-
-const redirectURI = "http://localhost:8080/callback"
-
-var (
-	auth = spotifyauth.New(
-		spotifyauth.WithRedirectURL(redirectURI),
-		spotifyauth.WithScopes(spotifyauth.ScopePlaylistModifyPrivate, spotifyauth.ScopePlaylistModifyPublic),
-	)
-	ch    = make(chan *spotify.Client)
-	state = "abc123"
+	spot "github.com/TheOtherDavid/deep-cuts/internal/spotify"
+	spotify "github.com/zmb3/spotify/v2"
 )
 
 func generateDeepCutPlaylist() func(w http.ResponseWriter, r *http.Request) {
 	return func(w http.ResponseWriter, r *http.Request) {
 		playlistId := mux.Vars(r)["playlistId"]
 
-		client, user := getAuth()
+		client, user := spot.GetAuth()
 
 		ctx := context.Background()
-		spotifyPlaylistId := spotify.ID(playlistId)
+
 		//Get input playlist
-		playlist := getPlaylist(ctx, client, spotifyPlaylistId)
+		playlist := getPlaylist(ctx, client, playlistId)
 		fmt.Println("Playlist retrieved.")
 		//Get each track
 		originalTracks := getFullTracksFromPlaylist(ctx, client, playlist)
@@ -58,53 +46,18 @@ func generateDeepCutPlaylist() func(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func getAuth() (*spotify.Client, *spotify.PrivateUser) {
-	var client *spotify.Client
-
-	rand.Seed(time.Now().UnixNano())
-	url := auth.AuthURL(state)
-	fmt.Println("Please log in to Spotify by visiting the following page in your browser:", url)
-
-	// wait for auth to complete
-	client = <-ch
-
-	// use the client to make calls that require authorization
-	user, err := client.CurrentUser(context.Background())
-	if err != nil {
-		log.Fatal(err)
-	}
-	fmt.Println("You are logged in as:", user.ID)
-
-	return client, user
-}
-
-func completeAuth(w http.ResponseWriter, r *http.Request) {
-	tok, err := auth.Token(r.Context(), state, r)
-	if err != nil {
-		http.Error(w, "Couldn't get token", http.StatusForbidden)
-		log.Fatal(err)
-	}
-	if st := r.FormValue("state"); st != state {
-		http.NotFound(w, r)
-		log.Fatalf("State mismatch: %s != %s\n", st, state)
-	}
-	// use the token to get an authenticated client
-	client := spotify.New(auth.Client(r.Context(), tok))
-	w.Header().Set("Content-Type", "text/html")
-	fmt.Fprintf(w, "Login Completed!")
-	ch <- client
-}
-
-func getPlaylist(ctx context.Context, client *spotify.Client, playlistId spotify.ID) *spotify.FullPlaylist {
+func getPlaylist(ctx context.Context, client *spotify.Client, playlistId string) *spotify.FullPlaylist {
 	fmt.Println("Beginning getPlaylist")
 	finalPlaylist := spotify.FullPlaylist{}
+
+	spotifyPlaylistId := spotify.ID(playlistId)
 
 	offset := 0
 	limit := 100
 
 	for {
 		spotifyOffset := spotify.Offset(offset)
-		playlist, err := client.GetPlaylist(ctx, playlistId, spotifyOffset, spotify.Limit(limit))
+		playlist, err := client.GetPlaylist(ctx, spotifyPlaylistId, spotifyOffset, spotify.Limit(limit))
 
 		if err != nil {
 			fmt.Println(err.Error)
@@ -271,7 +224,7 @@ func health() func(w http.ResponseWriter, r *http.Request) {
 
 func handleRequests() {
 	myRouter := mux.NewRouter().StrictSlash(true)
-	myRouter.HandleFunc("/callback", completeAuth)
+	myRouter.HandleFunc("/callback", spot.CompleteAuth)
 	myRouter.HandleFunc("/{playlistId}", generateDeepCutPlaylist()).Methods("POST")
 	log.Fatal(http.ListenAndServe(":8080", myRouter))
 }
