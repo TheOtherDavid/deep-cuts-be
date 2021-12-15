@@ -24,7 +24,7 @@ func generateDeepCutPlaylist() func(w http.ResponseWriter, r *http.Request) {
 		ctx := context.Background()
 
 		//Get input playlist
-		playlist := getPlaylist(ctx, client, playlistId)
+		playlist := getSpotifyPlaylist(ctx, client, playlistId)
 		fmt.Println("Playlist retrieved.")
 		//Get each track
 		originalTracks := getFullTracksFromPlaylist(ctx, client, playlist)
@@ -46,7 +46,26 @@ func generateDeepCutPlaylist() func(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func getPlaylist(ctx context.Context, client *spotify.Client, playlistId string) *spotify.FullPlaylist {
+func getPlaylist() func(w http.ResponseWriter, r *http.Request) {
+	return func(w http.ResponseWriter, r *http.Request) {
+		playlistId := mux.Vars(r)["playlistId"]
+
+		client, _ := spot.GetAuth()
+
+		ctx := context.Background()
+
+		//Get input playlist
+		playlist := getSpotifyPlaylist(ctx, client, playlistId)
+		fmt.Println("Playlist retrieved.")
+
+		defer r.Body.Close()
+
+		json.NewEncoder(w).Encode(playlist)
+
+	}
+}
+
+func getSpotifyPlaylist(ctx context.Context, client *spotify.Client, playlistId string) *spotify.FullPlaylist {
 	fmt.Println("Beginning getPlaylist")
 	finalPlaylist := spotify.FullPlaylist{}
 
@@ -225,6 +244,7 @@ func health() func(w http.ResponseWriter, r *http.Request) {
 func handleRequests() {
 	myRouter := mux.NewRouter().StrictSlash(true)
 	myRouter.HandleFunc("/callback", spot.CompleteAuth)
+	myRouter.HandleFunc("/{playlistId}", getPlaylist()).Methods("GET")
 	myRouter.HandleFunc("/{playlistId}", generateDeepCutPlaylist()).Methods("POST")
 	log.Fatal(http.ListenAndServe(":8080", myRouter))
 }
