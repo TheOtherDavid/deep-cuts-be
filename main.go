@@ -31,21 +31,8 @@ func generateDeepCutPlaylist() func(w http.ResponseWriter, r *http.Request) {
 	return func(w http.ResponseWriter, r *http.Request) {
 		playlistId := mux.Vars(r)["playlistId"]
 
-		var client *spotify.Client
+		client, user := getAuth()
 
-		rand.Seed(time.Now().UnixNano())
-		url := auth.AuthURL(state)
-		fmt.Println("Please log in to Spotify by visiting the following page in your browser:", url)
-
-		// wait for auth to complete
-		client = <-ch
-
-		// use the client to make calls that require authorization
-		user, err := client.CurrentUser(context.Background())
-		if err != nil {
-			log.Fatal(err)
-		}
-		fmt.Println("You are logged in as:", user.ID)
 		ctx := context.Background()
 		spotifyPlaylistId := spotify.ID(playlistId)
 		//Get input playlist
@@ -69,6 +56,26 @@ func generateDeepCutPlaylist() func(w http.ResponseWriter, r *http.Request) {
 		json.NewEncoder(w).Encode(generatedPlaylistId)
 
 	}
+}
+
+func getAuth() (*spotify.Client, *spotify.PrivateUser) {
+	var client *spotify.Client
+
+	rand.Seed(time.Now().UnixNano())
+	url := auth.AuthURL(state)
+	fmt.Println("Please log in to Spotify by visiting the following page in your browser:", url)
+
+	// wait for auth to complete
+	client = <-ch
+
+	// use the client to make calls that require authorization
+	user, err := client.CurrentUser(context.Background())
+	if err != nil {
+		log.Fatal(err)
+	}
+	fmt.Println("You are logged in as:", user.ID)
+
+	return client, user
 }
 
 func completeAuth(w http.ResponseWriter, r *http.Request) {
