@@ -17,6 +17,8 @@ import (
 
 func generateDeepCutPlaylist() func(w http.ResponseWriter, r *http.Request) {
 	return func(w http.ResponseWriter, r *http.Request) {
+		fmt.Println("Begin generate Deep Cut playlist.")
+
 		playlistId := mux.Vars(r)["playlistId"]
 
 		client, user := spot.GetAuth()
@@ -185,8 +187,9 @@ func getFinalPlaylistTracks(ctx context.Context, client *spotify.Client, origina
 			acceptableTracks := findAcceptableTracks(albumTracklist, forbiddenSongs)
 			if len(acceptableTracks) > 0 {
 				trackIndex := rand.Int() % len(acceptableTracks)
-				finalTracks = append(finalTracks, albumTracklist[trackIndex])
-				forbiddenSongs = append(forbiddenSongs, albumTracklist[trackIndex])
+				trackToAdd := acceptableTracks[trackIndex]
+				finalTracks = append(finalTracks, trackToAdd)
+				forbiddenSongs = append(forbiddenSongs, trackToAdd)
 			}
 		}
 	}
@@ -244,8 +247,8 @@ func health() func(w http.ResponseWriter, r *http.Request) {
 func handleRequests() {
 	myRouter := mux.NewRouter().StrictSlash(true)
 	myRouter.HandleFunc("/callback", spot.CompleteAuth)
-	myRouter.HandleFunc("/{playlistId}", getPlaylist()).Methods("GET")
 	myRouter.HandleFunc("/{playlistId}", generateDeepCutPlaylist()).Methods("POST")
+	myRouter.HandleFunc("/{playlistId}", getPlaylist()).Methods("GET")
 	log.Fatal(http.ListenAndServe(":8080", myRouter))
 }
 
