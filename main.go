@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"os"
 	"strconv"
+	"time"
 
 	spot "github.com/TheOtherDavid/deep-cuts/internal/spotify"
 	spotify "github.com/zmb3/spotify/v2"
@@ -161,6 +162,7 @@ func createPlaylist(ctx context.Context, client *spotify.Client, user *spotify.P
 func getFinalPlaylistTracks(ctx context.Context, client *spotify.Client, originalTracks []spotify.FullTrack, programMode string) []spotify.SimpleTrack {
 	finalTracks := []spotify.SimpleTrack{}
 	forbiddenSongs := []spotify.SimpleTrack{}
+	rand.Seed(time.Now().UnixNano())
 
 	//First we add every item on the list to the forbiddenSongs list
 	for _, originalTrack := range originalTracks {
@@ -246,9 +248,11 @@ func health() func(w http.ResponseWriter, r *http.Request) {
 
 func handleRequests() {
 	myRouter := mux.NewRouter().StrictSlash(true)
+	myRouter.HandleFunc("/login", spot.Login()).Methods("GET")
 	myRouter.HandleFunc("/callback", spot.CompleteAuth)
 	myRouter.HandleFunc("/{playlistId}", generateDeepCutPlaylist()).Methods("POST")
 	myRouter.HandleFunc("/{playlistId}", getPlaylist()).Methods("GET")
+
 	log.Fatal(http.ListenAndServe(":8080", myRouter))
 }
 

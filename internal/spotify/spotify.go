@@ -2,21 +2,27 @@ package spotify
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	spotifyauth "github.com/zmb3/spotify/v2/auth"
 	"log"
-	"math/rand"
 	"net/http"
 
 	"github.com/zmb3/spotify/v2"
-	"time"
 )
 
 const redirectURI = "http://localhost:8080/callback"
 
+//This is the URL of the UI
+const redirectURIUI = "http://localhost:3000/"
+
 var (
 	auth = spotifyauth.New(
 		spotifyauth.WithRedirectURL(redirectURI),
+		spotifyauth.WithScopes(spotifyauth.ScopePlaylistModifyPrivate, spotifyauth.ScopePlaylistModifyPublic),
+	)
+	authUI = spotifyauth.New(
+		spotifyauth.WithRedirectURL(redirectURIUI),
 		spotifyauth.WithScopes(spotifyauth.ScopePlaylistModifyPrivate, spotifyauth.ScopePlaylistModifyPublic),
 	)
 	ch    = make(chan *spotify.Client)
@@ -26,8 +32,7 @@ var (
 func GetAuth() (*spotify.Client, *spotify.PrivateUser) {
 	var client *spotify.Client
 
-	rand.Seed(time.Now().UnixNano())
-	url := auth.AuthURL(state)
+	url := authUI.AuthURL(state)
 	fmt.Println("Please log in to Spotify by visiting the following page in your browser:", url)
 
 	// wait for auth to complete
@@ -58,4 +63,15 @@ func CompleteAuth(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "text/html")
 	fmt.Fprintf(w, "Login Completed!")
 	ch <- client
+}
+
+func Login() func(w http.ResponseWriter, r *http.Request) {
+	return func(w http.ResponseWriter, r *http.Request) {
+		url := authUI.AuthURL(state)
+		fmt.Println(url)
+
+		defer r.Body.Close()
+
+		json.NewEncoder(w).Encode(url)
+	}
 }
