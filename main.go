@@ -16,13 +16,25 @@ import (
 	spotify "github.com/zmb3/spotify/v2"
 )
 
+type Code struct {
+	Code string
+}
+
 func generateDeepCutPlaylist() func(w http.ResponseWriter, r *http.Request) {
 	return func(w http.ResponseWriter, r *http.Request) {
 		fmt.Println("Begin generate Deep Cut playlist.")
 
 		playlistId := mux.Vars(r)["playlistId"]
 
-		client, user := spot.GetAuth()
+		var code Code
+
+		decoder := json.NewDecoder(r.Body)
+		if err := decoder.Decode(&code); err != nil {
+			http.Error(w, "Couldn't decode request.", http.StatusForbidden)
+			log.Fatal(err)
+		}
+
+		client, user := spot.GetAuthWithCode(code.Code)
 
 		ctx := context.Background()
 
@@ -53,7 +65,7 @@ func getPlaylist() func(w http.ResponseWriter, r *http.Request) {
 	return func(w http.ResponseWriter, r *http.Request) {
 		playlistId := mux.Vars(r)["playlistId"]
 
-		client, _ := spot.GetAuth()
+		client, _ := spot.GetClient(w, r)
 
 		ctx := context.Background()
 
@@ -248,7 +260,6 @@ func health() func(w http.ResponseWriter, r *http.Request) {
 
 func handleRequests() {
 	myRouter := mux.NewRouter().StrictSlash(true)
-	myRouter.HandleFunc("/login", spot.Login()).Methods("GET")
 	myRouter.HandleFunc("/callback", spot.CompleteAuth)
 	myRouter.HandleFunc("/{playlistId}", generateDeepCutPlaylist()).Methods("POST")
 	myRouter.HandleFunc("/{playlistId}", getPlaylist()).Methods("GET")

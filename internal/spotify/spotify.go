@@ -2,7 +2,6 @@ package spotify
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	spotifyauth "github.com/zmb3/spotify/v2/auth"
 	"log"
@@ -15,6 +14,10 @@ const redirectURI = "http://localhost:8080/callback"
 
 //This is the URL of the UI
 const redirectURIUI = "http://localhost:3000/"
+
+type Code struct {
+	Code string
+}
 
 var (
 	auth = spotifyauth.New(
@@ -65,13 +68,25 @@ func CompleteAuth(w http.ResponseWriter, r *http.Request) {
 	ch <- client
 }
 
-func Login() func(w http.ResponseWriter, r *http.Request) {
-	return func(w http.ResponseWriter, r *http.Request) {
-		url := authUI.AuthURL(state)
-		fmt.Println(url)
+func GetAuthWithCode(code string) (*spotify.Client, *spotify.PrivateUser) {
 
-		defer r.Body.Close()
+	ctx := context.Background()
 
-		json.NewEncoder(w).Encode(url)
+	token, err := authUI.Exchange(ctx, code)
+
+	// wait for auth to complete
+	//client = <-ch
+
+	// use the token to get an authenticated client
+	client := spotify.New(authUI.Client(ctx, token))
+
+	// use the client to make calls that require authorization
+	user, err := client.CurrentUser(context.Background())
+
+	if err != nil {
+		log.Fatal(err)
 	}
+	fmt.Println("You are logged in as:", user.ID)
+
+	return client, user
 }
