@@ -17,7 +17,7 @@ import (
 )
 
 type Code struct {
-	Code string
+	Code string `json:"code"`
 }
 
 func generateDeepCutPlaylist() func(w http.ResponseWriter, r *http.Request) {
@@ -56,26 +56,9 @@ func generateDeepCutPlaylist() func(w http.ResponseWriter, r *http.Request) {
 
 		defer r.Body.Close()
 
+		w.Header().Set("Access-Control-Allow-Origin", "*")
+		w.WriteHeader(http.StatusOK)
 		json.NewEncoder(w).Encode(generatedPlaylistId)
-
-	}
-}
-
-func getPlaylist() func(w http.ResponseWriter, r *http.Request) {
-	return func(w http.ResponseWriter, r *http.Request) {
-		playlistId := mux.Vars(r)["playlistId"]
-
-		client, _ := spot.GetClient(w, r)
-
-		ctx := context.Background()
-
-		//Get input playlist
-		playlist := getSpotifyPlaylist(ctx, client, playlistId)
-		fmt.Println("Playlist retrieved.")
-
-		defer r.Body.Close()
-
-		json.NewEncoder(w).Encode(playlist)
 
 	}
 }
@@ -258,11 +241,19 @@ func health() func(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+func cors() func(w http.ResponseWriter, r *http.Request) {
+	return func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Access-Control-Allow-Origin", "*")
+		w.Header().Set("Access-Control-Allow-Headers", "Origin, X-Requested-With, Content-Type, Accept, Authorization")
+		w.WriteHeader(http.StatusOK)
+	}
+}
+
 func handleRequests() {
 	myRouter := mux.NewRouter().StrictSlash(true)
 	myRouter.HandleFunc("/callback", spot.CompleteAuth)
 	myRouter.HandleFunc("/{playlistId}", generateDeepCutPlaylist()).Methods("POST")
-	myRouter.HandleFunc("/{playlistId}", getPlaylist()).Methods("GET")
+	myRouter.HandleFunc("/{playlistId}", cors()).Methods("OPTIONS")
 
 	log.Fatal(http.ListenAndServe(":8080", myRouter))
 }
