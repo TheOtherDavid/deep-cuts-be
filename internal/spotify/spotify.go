@@ -68,7 +68,7 @@ func CompleteAuth(w http.ResponseWriter, r *http.Request) {
 	ch <- client
 }
 
-func GetAuthWithCode(code string) (*spotify.Client, *spotify.PrivateUser) {
+func GetAuthWithCode(code string) (*spotify.Client, *spotify.PrivateUser, error) {
 
 	ctx := context.Background()
 
@@ -84,9 +84,9 @@ func GetAuthWithCode(code string) (*spotify.Client, *spotify.PrivateUser) {
 	user, err := client.CurrentUser(context.Background())
 
 	if err != nil {
-		log.Fatal(err)
+		return nil, nil, err
 	}
 	fmt.Println("You are logged in as:", user.ID)
 
-	return client, user
+	return client, user, nil
 }

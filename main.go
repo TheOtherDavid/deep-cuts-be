@@ -20,6 +20,18 @@ type Code struct {
 	Code string `json:"code"`
 }
 
+func respondWithError(w http.ResponseWriter, code int, message string) {
+	respondWithJSON(w, code, map[string]string{"error": message})
+}
+
+func respondWithJSON(w http.ResponseWriter, code int, payload interface{}) {
+	response, _ := json.Marshal(payload)
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(code)
+	w.Write(response)
+}
+
 func generateDeepCutPlaylist() func(w http.ResponseWriter, r *http.Request) {
 	return func(w http.ResponseWriter, r *http.Request) {
 		fmt.Println("Begin generate Deep Cut playlist.")
@@ -30,11 +42,14 @@ func generateDeepCutPlaylist() func(w http.ResponseWriter, r *http.Request) {
 
 		decoder := json.NewDecoder(r.Body)
 		if err := decoder.Decode(&code); err != nil {
-			http.Error(w, "Couldn't decode request.", http.StatusForbidden)
-			log.Fatal(err)
+			http.Error(w, "Couldn't decode request.", http.StatusUnprocessableEntity)
+			return
 		}
 
-		client, user := spot.GetAuthWithCode(code.Code)
+		client, user, err := spot.GetAuthWithCode(code.Code)
+		if err != nil {
+			http.Error(w, "Error creating playlist.", http.StatusForbidden)
+		}
 
 		ctx := context.Background()
 
@@ -50,15 +65,51 @@ func generateDeepCutPlaylist() func(w http.ResponseWriter, r *http.Request) {
 
 		programMode := os.Getenv("PROGRAM_MODE")
 
-		finalTracks := getFinalPlaylistTracks(ctx, client, originalTracks, programMode)
+		finalTracks, err := getFinalPlaylistTracks(ctx, client, originalTracks, programMode)
+		if err != nil {
+			http.Error(w, "Error determining playlist tracks.", http.StatusInternalServerError)
+		}
 		//Create playlist
-		generatedPlaylistId := createPlaylist(ctx, client, user, finalTracks, newPlaylistName)
+		generatedPlaylistId, err := createPlaylist(ctx, client, user, finalTracks, newPlaylistName)
+		if err != nil {
+			http.Error(w, "Error creating playlist.", http.StatusInternalServerError)
+		}
 
 		defer r.Body.Close()
 
 		w.Header().Set("Access-Control-Allow-Origin", "*")
 		w.WriteHeader(http.StatusOK)
 		json.NewEncoder(w).Encode(generatedPlaylistId)
+
+	}
+}
+
+func getPlaylist() func(w http.ResponseWriter, r *http.Request) {
+	return func(w http.ResponseWriter, r *http.Request) {
+		playlistId := mux.Vars(r)["playlistId"]
+
+		var code Code
+
+		decoder := json.NewDecoder(r.Body)
+		if err := decoder.Decode(&code); err != nil {
+			http.Error(w, "Couldn't decode request.", http.StatusForbidden)
+			log.Fatal(err)
+		}
+
+		client, _, err := spot.GetAuthWithCode(code.Code)
+		if err != nil {
+			http.Error(w, "Error creating playlist.", http.StatusForbidden)
+		}
+
+		ctx := context.Background()
+
+		//Get input playlist
+		playlist := getSpotifyPlaylist(ctx, client, playlistId)
+		fmt.Println("Playlist retrieved.")
+
+		defer r.Body.Close()
+
+		json.NewEncoder(w).Encode(playlist)
 
 	}
 }
@@ -105,18 +156,18 @@ func getFullTracksFromPlaylist(ctx context.Context, client *spotify.Client, play
 	return tracks
 }
 
-func getAlbum(ctx context.Context, client *spotify.Client, albumId spotify.ID) *spotify.FullAlbum {
+func getAlbum(ctx context.Context, client *spotify.Client, albumId spotify.ID) (*spotify.FullAlbum, error) {
 	fmt.Println("Beginning getAlbum")
 	album, err := client.GetAlbum(ctx, albumId)
 
 	if err != nil {
-		fmt.Println(err.Error)
+		return nil, err
 	}
 	fmt.Println(album.ID)
-	return album
+	return album, nil
 }
 
-func createPlaylist(ctx context.Context, client *spotify.Client, user *spotify.PrivateUser, tracks []spotify.SimpleTrack, playlistName string) string {
+func createPlaylist(ctx context.Context, client *spotify.Client, user *spotify.PrivateUser, tracks []spotify.SimpleTrack, playlistName string) (string, error) {
 	fmt.Println("Beginning createPlaylist")
 
 	playlistDescription := "Created automatically"
@@ -126,7 +177,7 @@ func createPlaylist(ctx context.Context, client *spotify.Client, user *spotify.P
 
 	createdPlaylist, err := client.CreatePlaylistForUser(ctx, userId, playlistName, playlistDescription, createPublicPlaylist, collaborativePlaylist)
 	if err != nil {
-		fmt.Println(err.Error)
+		return "", err
 	}
 	playlistId := createdPlaylist.ID
 	//Get track IDs from list of tracks
@@ -147,14 +198,15 @@ func createPlaylist(ctx context.Context, client *spotify.Client, user *spotify.P
 		_, err = client.AddTracksToPlaylist(ctx, playlistId, trackIds[i:j]...)
 		if err != nil {
 			fmt.Println(err.Error)
+			return "", err
 		}
 	}
 
 	fmt.Println("Playlist created")
-	return playlistId.String()
+	return playlistId.String(), nil
 }
 
-func getFinalPlaylistTracks(ctx context.Context, client *spotify.Client, originalTracks []spotify.FullTrack, programMode string) []spotify.SimpleTrack {
+func getFinalPlaylistTracks(ctx context.Context, client *spotify.Client, originalTracks []spotify.FullTrack, programMode string) ([]spotify.SimpleTrack, error) {
 	finalTracks := []spotify.SimpleTrack{}
 	forbiddenSongs := []spotify.SimpleTrack{}
 	rand.Seed(time.Now().UnixNano())
@@ -167,7 +219,10 @@ func getFinalPlaylistTracks(ctx context.Context, client *spotify.Client, origina
 	for i, originalTrack := range originalTracks {
 		//Get album for each track, and the tracks from those albums
 		albumId := originalTrack.Album.ID
-		album := getAlbum(ctx, client, albumId)
+		album, err := getAlbum(ctx, client, albumId)
+		if err != nil {
+			return nil, err
+		}
 		fmt.Println("Album retrieved: " + strconv.Itoa(i))
 		albumTracklist := album.Tracks.Tracks
 		switch programMode {
@@ -190,7 +245,7 @@ func getFinalPlaylistTracks(ctx context.Context, client *spotify.Client, origina
 			}
 		}
 	}
-	return finalTracks
+	return finalTracks, nil
 }
 
 func isSongIDForbidden(forbiddenSongs []spotify.SimpleTrack, song spotify.SimpleTrack) bool {
@@ -252,6 +307,8 @@ func cors() func(w http.ResponseWriter, r *http.Request) {
 func handleRequests() {
 	myRouter := mux.NewRouter().StrictSlash(true)
 	myRouter.HandleFunc("/callback", spot.CompleteAuth)
+	myRouter.HandleFunc("/health", health()).Methods("GET")
+	myRouter.HandleFunc("/{playlistId}", getPlaylist()).Methods("GET")
 	myRouter.HandleFunc("/{playlistId}", generateDeepCutPlaylist()).Methods("POST")
 	myRouter.HandleFunc("/{playlistId}", cors()).Methods("OPTIONS")
 
