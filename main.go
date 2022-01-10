@@ -105,7 +105,7 @@ func getPlaylist() func(w http.ResponseWriter, r *http.Request) {
 
 		if !ok || len(codes[0]) < 1 {
 			http.Error(w, "Couldn't get code from request.", http.StatusForbidden)
-			log.Fatal(err)
+			log.Fatal("Couldn't get code from request.")
 			return
 		}
 
