@@ -43,18 +43,27 @@ func generateDeepCutPlaylist() func(w http.ResponseWriter, r *http.Request) {
 		decoder := json.NewDecoder(r.Body)
 		if err := decoder.Decode(&code); err != nil {
 			http.Error(w, "Couldn't decode request.", http.StatusUnprocessableEntity)
+			log.Fatal(err)
 			return
 		}
 
 		client, user, err := spot.GetAuthWithCode(code.Code)
 		if err != nil {
 			http.Error(w, "Error creating playlist.", http.StatusForbidden)
+			log.Fatal(err)
+			return
 		}
 
 		ctx := context.Background()
 
 		//Get input playlist
-		playlist := getSpotifyPlaylist(ctx, client, playlistId)
+		playlist, err := getSpotifyPlaylist(ctx, client, playlistId)
+		if err != nil {
+			http.Error(w, "Error retrieving playlist.", http.StatusInternalServerError)
+			log.Fatal(err)
+			return
+		}
+
 		fmt.Println("Playlist retrieved.")
 		//Get each track
 		originalTracks := getFullTracksFromPlaylist(ctx, client, playlist)
@@ -68,11 +77,15 @@ func generateDeepCutPlaylist() func(w http.ResponseWriter, r *http.Request) {
 		finalTracks, err := getFinalPlaylistTracks(ctx, client, originalTracks, programMode)
 		if err != nil {
 			http.Error(w, "Error determining playlist tracks.", http.StatusInternalServerError)
+			log.Fatal(err)
+			return
 		}
 		//Create playlist
 		generatedPlaylistId, err := createPlaylist(ctx, client, user, finalTracks, newPlaylistName)
 		if err != nil {
 			http.Error(w, "Error creating playlist.", http.StatusInternalServerError)
+			log.Fatal(err)
+			return
 		}
 
 		defer r.Body.Close()
@@ -88,23 +101,35 @@ func getPlaylist() func(w http.ResponseWriter, r *http.Request) {
 	return func(w http.ResponseWriter, r *http.Request) {
 		playlistId := mux.Vars(r)["playlistId"]
 
-		var code Code
+		codes, ok := r.URL.Query()["code"]
 
-		decoder := json.NewDecoder(r.Body)
-		if err := decoder.Decode(&code); err != nil {
-			http.Error(w, "Couldn't decode request.", http.StatusForbidden)
+		if !ok || len(codes[0]) < 1 {
+			http.Error(w, "Couldn't get code from request.", http.StatusForbidden)
 			log.Fatal(err)
+			return
 		}
 
-		client, _, err := spot.GetAuthWithCode(code.Code)
+		code := codes[0]
+
+		log.Println("Url Param 'code' is: " + string(code))
+
+		client, _, err := spot.GetAuthWithCode(code)
 		if err != nil {
-			http.Error(w, "Error creating playlist.", http.StatusForbidden)
+			http.Error(w, "Error getting client.", http.StatusForbidden)
+			log.Fatal(err)
+			return
 		}
 
 		ctx := context.Background()
 
 		//Get input playlist
-		playlist := getSpotifyPlaylist(ctx, client, playlistId)
+		playlist, err := getSpotifyPlaylist(ctx, client, playlistId)
+		if err != nil {
+			http.Error(w, "Error retrieving playlist.", http.StatusInternalServerError)
+			log.Fatal(err)
+			return
+		}
+
 		fmt.Println("Playlist retrieved.")
 
 		defer r.Body.Close()
@@ -114,7 +139,7 @@ func getPlaylist() func(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func getSpotifyPlaylist(ctx context.Context, client *spotify.Client, playlistId string) *spotify.FullPlaylist {
+func getSpotifyPlaylist(ctx context.Context, client *spotify.Client, playlistId string) (*spotify.FullPlaylist, error) {
 	fmt.Println("Beginning getPlaylist")
 	finalPlaylist := spotify.FullPlaylist{}
 
@@ -128,7 +153,7 @@ func getSpotifyPlaylist(ctx context.Context, client *spotify.Client, playlistId 
 		playlist, err := client.GetPlaylist(ctx, spotifyPlaylistId, spotifyOffset, spotify.Limit(limit))
 
 		if err != nil {
-			fmt.Println(err.Error)
+			return nil, err
 		}
 		fmt.Println(playlist.ID)
 
@@ -143,7 +168,7 @@ func getSpotifyPlaylist(ctx context.Context, client *spotify.Client, playlistId 
 		offset = offset + limit
 	}
 
-	return &finalPlaylist
+	return &finalPlaylist, nil
 }
 
 func getFullTracksFromPlaylist(ctx context.Context, client *spotify.Client, playlist *spotify.FullPlaylist) []spotify.FullTrack {
