@@ -37,17 +37,23 @@ func generateDeepCutPlaylist() func(w http.ResponseWriter, r *http.Request) {
 		fmt.Println("Begin generate Deep Cut playlist.")
 
 		playlistId := mux.Vars(r)["playlistId"]
+		if playlistId == "" || playlistId == "undefined" {
+			http.Error(w, "Couldn't get playlist ID from request.", http.StatusBadRequest)
+		}
 
-		var code Code
+		codes, ok := r.URL.Query()["code"]
 
-		decoder := json.NewDecoder(r.Body)
-		if err := decoder.Decode(&code); err != nil {
-			http.Error(w, "Couldn't decode request.", http.StatusUnprocessableEntity)
-			log.Println(err)
+		if !ok || len(codes[0]) < 1 {
+			http.Error(w, "Couldn't get code from request.", http.StatusForbidden)
+			log.Println("Couldn't get code from request.")
 			return
 		}
 
-		client, user, err := spot.GetAuthWithCode(code.Code)
+		code := codes[0]
+
+		log.Println("Url Param 'code' is: " + string(code))
+
+		client, user, err := spot.GetAuthWithCode(code)
 		if err != nil {
 			http.Error(w, "Error getting auth.", http.StatusForbidden)
 			log.Println(err)
@@ -88,12 +94,25 @@ func generateDeepCutPlaylist() func(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
+		//Get playlist from ID
+		playlist, err = getSpotifyPlaylist(ctx, client, generatedPlaylistId)
+		if err != nil {
+			http.Error(w, "Error retrieving playlist.", http.StatusInternalServerError)
+			log.Println(err)
+			return
+		}
+
+		fmt.Println("Playlist retrieved.")
+
+		//Get easier-to-process tracks from playlist
+		playlistTracks := getFullTracksFromPlaylist(ctx, client, playlist)
+
 		defer r.Body.Close()
 
 		w.Header().Set("Access-Control-Allow-Origin", "*")
 		w.WriteHeader(http.StatusOK)
-		json.NewEncoder(w).Encode(generatedPlaylistId)
 
+		json.NewEncoder(w).Encode(playlistTracks)
 	}
 }
 
@@ -125,7 +144,7 @@ func getPlaylist() func(w http.ResponseWriter, r *http.Request) {
 
 		ctx := context.Background()
 
-		//Get input playlist
+		//Get playlist from ID
 		playlist, err := getSpotifyPlaylist(ctx, client, playlistId)
 		if err != nil {
 			http.Error(w, "Error retrieving playlist.", http.StatusInternalServerError)
@@ -135,13 +154,15 @@ func getPlaylist() func(w http.ResponseWriter, r *http.Request) {
 
 		fmt.Println("Playlist retrieved.")
 
+		//Get easier-to-process tracks from playlist
+		playlistTracks := getFullTracksFromPlaylist(ctx, client, playlist)
+
 		defer r.Body.Close()
 
 		w.Header().Set("Access-Control-Allow-Origin", "*")
 		w.WriteHeader(http.StatusOK)
 
-		json.NewEncoder(w).Encode(playlist)
-
+		json.NewEncoder(w).Encode(playlistTracks)
 	}
 }
 
