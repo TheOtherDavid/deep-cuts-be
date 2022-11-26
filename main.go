@@ -20,6 +20,10 @@ type Code struct {
 	Code string `json:"code"`
 }
 
+type TokenResponse struct {
+	Token string `json:"token"`
+}
+
 func respondWithError(w http.ResponseWriter, code int, message string) {
 	respondWithJSON(w, code, map[string]string{"error": message})
 }
@@ -333,6 +337,37 @@ func findAcceptableTracks(potentialTracks []spotify.SimpleTrack, forbiddenTracks
 	return acceptableTracks
 }
 
+func getSpotifyToken() func(w http.ResponseWriter, r *http.Request) {
+	return func(w http.ResponseWriter, r *http.Request) {
+		codes, ok := r.URL.Query()["code"]
+
+		if !ok || len(codes[0]) < 1 {
+			http.Error(w, "Couldn't get code from request.", http.StatusForbidden)
+			log.Println("Couldn't get code from request.")
+			return
+		}
+
+		code := codes[0]
+
+		log.Println("Url Param 'code' is: " + string(code))
+
+		token, err := spot.GetTokenWithCode(code)
+		if err != nil {
+			http.Error(w, "Error getting token.", http.StatusForbidden)
+			log.Println(err)
+			return
+		}
+		tokenResponse := TokenResponse{
+			Token: token,
+		}
+
+		w.Header().Set("Access-Control-Allow-Origin", "*")
+		w.WriteHeader(http.StatusOK)
+
+		json.NewEncoder(w).Encode(tokenResponse)
+	}
+}
+
 type healthCheckResponse struct {
 	Status string `json:"status"`
 }
@@ -360,6 +395,7 @@ func handleRequests() {
 	myRouter := mux.NewRouter().StrictSlash(true)
 	myRouter.HandleFunc("/callback", spot.CompleteAuth)
 	myRouter.HandleFunc("/health", health()).Methods("GET")
+	myRouter.HandleFunc("/token", getSpotifyToken()).Methods("GET")
 	myRouter.HandleFunc("/{playlistId}", getPlaylist()).Methods("GET")
 	myRouter.HandleFunc("/{playlistId}", generateDeepCutPlaylist()).Methods("POST")
 	myRouter.HandleFunc("/{playlistId}", cors()).Methods("OPTIONS")

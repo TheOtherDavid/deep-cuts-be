@@ -90,3 +90,17 @@ func GetAuthWithCode(code string) (*spotify.Client, *spotify.PrivateUser, error)
 
 	return client, user, nil
 }
+
+func GetTokenWithCode(code string) (string, error) {
+
+	ctx := context.Background()
+
+	token, err := authUI.Exchange(ctx, code)
+	if err != nil {
+		return "", err
+	}
+
+	tokenString := token.AccessToken
+
+	return tokenString, err
+}
