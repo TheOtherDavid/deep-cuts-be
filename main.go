@@ -363,6 +363,7 @@ func getSpotifyToken() func(w http.ResponseWriter, r *http.Request) {
 
 		w.Header().Set("Access-Control-Allow-Origin", "*")
 		w.WriteHeader(http.StatusOK)
+		log.Println("Successfully returning token.")
 
 		json.NewEncoder(w).Encode(tokenResponse)
 	}
