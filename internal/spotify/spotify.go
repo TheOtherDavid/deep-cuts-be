@@ -8,6 +8,7 @@ import (
 	"net/http"
 
 	"github.com/zmb3/spotify/v2"
+	"golang.org/x/oauth2"
 )
 
 const redirectURI = "http://localhost:8080/callback"
@@ -82,6 +83,27 @@ func GetAuthWithCode(code string) (*spotify.Client, *spotify.PrivateUser, error)
 
 	// use the client to make calls that require authorization
 	user, err := client.CurrentUser(context.Background())
+
+	if err != nil {
+		return nil, nil, err
+	}
+	fmt.Println("You are logged in as:", user.ID)
+
+	return client, user, nil
+}
+
+func GetAuthWithToken(token string) (*spotify.Client, *spotify.PrivateUser, error) {
+	ctx := context.Background()
+
+	oauthToken := &oauth2.Token{
+		AccessToken: token,
+	}
+
+	// use the token to get an authenticated client
+	client := spotify.New(authUI.Client(ctx, oauthToken))
+
+	// use the client to make calls that require authorization
+	user, err := client.CurrentUser(ctx)
 
 	if err != nil {
 		return nil, nil, err

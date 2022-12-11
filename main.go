@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"os"
 	"strconv"
+	"strings"
 	"time"
 
 	spot "github.com/TheOtherDavid/deep-cuts/internal/spotify"
@@ -38,30 +39,29 @@ func respondWithJSON(w http.ResponseWriter, code int, payload interface{}) {
 
 func generateDeepCutPlaylist() func(w http.ResponseWriter, r *http.Request) {
 	return func(w http.ResponseWriter, r *http.Request) {
+		tokenHeader := r.Header.Get("Authorization")
+		if tokenHeader == "" {
+			http.Error(w, "Couldn't get playlist ID from request.", http.StatusForbidden)
+			return
+		}
+
+		log.Println("Token header is: " + string(tokenHeader))
+		headerParts := strings.Split(tokenHeader, " ")
+		token := headerParts[1]
+
+		//Now we somehow get the client with the token instead of the code.
+		client, user, err := spot.GetAuthWithToken(token)
+		if err != nil {
+			http.Error(w, "Error getting auth.", http.StatusForbidden)
+			log.Println(err)
+			return
+		}
+
 		fmt.Println("Begin generate Deep Cut playlist.")
 
 		playlistId := mux.Vars(r)["playlistId"]
 		if playlistId == "" || playlistId == "undefined" {
 			http.Error(w, "Couldn't get playlist ID from request.", http.StatusBadRequest)
-		}
-
-		codes, ok := r.URL.Query()["code"]
-
-		if !ok || len(codes[0]) < 1 {
-			http.Error(w, "Couldn't get code from request.", http.StatusForbidden)
-			log.Println("Couldn't get code from request.")
-			return
-		}
-
-		code := codes[0]
-
-		log.Println("Url Param 'code' is: " + string(code))
-
-		client, user, err := spot.GetAuthWithCode(code)
-		if err != nil {
-			http.Error(w, "Error getting auth.", http.StatusForbidden)
-			log.Println(err)
-			return
 		}
 
 		ctx := context.Background()
@@ -122,28 +122,26 @@ func generateDeepCutPlaylist() func(w http.ResponseWriter, r *http.Request) {
 
 func getPlaylist() func(w http.ResponseWriter, r *http.Request) {
 	return func(w http.ResponseWriter, r *http.Request) {
-		playlistId := mux.Vars(r)["playlistId"]
-		if playlistId == "" || playlistId == "undefined" {
-			http.Error(w, "Couldn't get playlist ID from request.", http.StatusBadRequest)
+		tokenHeader := r.Header.Get("Authorization")
+		if tokenHeader == "" {
+			http.Error(w, "Couldn't get playlist ID from request.", http.StatusForbidden)
 		}
 
-		codes, ok := r.URL.Query()["code"]
+		log.Println("Token header is: " + string(tokenHeader))
+		headerParts := strings.Split(tokenHeader, " ")
+		token := headerParts[1]
 
-		if !ok || len(codes[0]) < 1 {
-			http.Error(w, "Couldn't get code from request.", http.StatusForbidden)
-			log.Println("Couldn't get code from request.")
-			return
-		}
-
-		code := codes[0]
-
-		log.Println("Url Param 'code' is: " + string(code))
-
-		client, _, err := spot.GetAuthWithCode(code)
+		//Now we somehow get the client with the token instead of the code.
+		client, _, err := spot.GetAuthWithToken(token)
 		if err != nil {
 			http.Error(w, "Error getting client.", http.StatusForbidden)
 			log.Println(err)
 			return
+		}
+
+		playlistId := mux.Vars(r)["playlistId"]
+		if playlistId == "" || playlistId == "undefined" {
+			http.Error(w, "Couldn't get playlist ID from request.", http.StatusBadRequest)
 		}
 
 		ctx := context.Background()
