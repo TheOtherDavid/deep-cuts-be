@@ -49,7 +49,6 @@ func generateDeepCutPlaylist() func(w http.ResponseWriter, r *http.Request) {
 		headerParts := strings.Split(tokenHeader, " ")
 		token := headerParts[1]
 
-		//Now we somehow get the client with the token instead of the code.
 		client, user, err := spot.GetAuthWithToken(token)
 		if err != nil {
 			http.Error(w, "Error getting auth.", http.StatusForbidden)
