@@ -61,6 +61,8 @@ func generateDeepCutPlaylist() func(w http.ResponseWriter, r *http.Request) {
 		playlistId := mux.Vars(r)["playlistId"]
 		if playlistId == "" || playlistId == "undefined" {
 			http.Error(w, "Couldn't get playlist ID from request.", http.StatusBadRequest)
+			log.Println(err)
+			return
 		}
 
 		ctx := context.Background()
@@ -76,6 +78,11 @@ func generateDeepCutPlaylist() func(w http.ResponseWriter, r *http.Request) {
 		fmt.Println("Playlist retrieved.")
 		//Get each track
 		originalTracks := getFullTracksFromPlaylist(ctx, client, playlist)
+		if len(originalTracks) == 0 {
+			http.Error(w, "No tracks in playlist", http.StatusBadRequest)
+			log.Println(err)
+			return
+		}
 		fmt.Println("Tracks retrieved.")
 
 		playlistName := playlist.Name
