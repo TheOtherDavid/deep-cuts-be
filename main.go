@@ -118,9 +118,10 @@ func generateDeepCutPlaylist() func(w http.ResponseWriter, r *http.Request) {
 		playlistTracks := getFullTracksFromPlaylist(ctx, client, playlist)
 
 		defer r.Body.Close()
+		fmt.Println("Returning response to GeneratePlaylist.")
 
 		w.Header().Set("Access-Control-Allow-Origin", "*")
-		w.WriteHeader(http.StatusOK)
+		w.WriteHeader(http.StatusCreated)
 
 		json.NewEncoder(w).Encode(playlistTracks)
 	}
@@ -166,6 +167,8 @@ func getPlaylist() func(w http.ResponseWriter, r *http.Request) {
 		playlistTracks := getFullTracksFromPlaylist(ctx, client, playlist)
 
 		defer r.Body.Close()
+
+		fmt.Println("Returning response to GetPlaylist.")
 
 		w.Header().Set("Access-Control-Allow-Origin", "*")
 		w.WriteHeader(http.StatusOK)
