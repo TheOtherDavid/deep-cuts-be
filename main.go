@@ -406,7 +406,7 @@ func handleRequests() {
 	myRouter.HandleFunc("/token", getSpotifyToken()).Methods("GET")
 	myRouter.HandleFunc("/{playlistId}", getPlaylist()).Methods("GET")
 	myRouter.HandleFunc("/{playlistId}", generateDeepCutPlaylist()).Methods("POST")
-	myRouter.HandleFunc("/{playlistId}", cors()).Methods("OPTIONS")
+	myRouter.HandleFunc("/", cors()).Methods("OPTIONS")
 
 	log.Fatal(http.ListenAndServe(":8080", myRouter))
 }
