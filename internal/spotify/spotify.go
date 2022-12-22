@@ -6,22 +6,20 @@ import (
 	spotifyauth "github.com/zmb3/spotify/v2/auth"
 	"log"
 	"net/http"
+	"os"
 
 	"github.com/zmb3/spotify/v2"
 	"golang.org/x/oauth2"
 )
-
-const redirectURI = "http://localhost:8080/callback"
-
-//This is the URL of the UI
-const redirectURIUI = "http://localhost:3000/"
 
 type Code struct {
 	Code string
 }
 
 var (
-	auth = spotifyauth.New(
+	redirectURI   = os.Getenv("SPOTIFY_REDIRECT_URI")
+	redirectURIUI = os.Getenv("SPOTIFY_REDIRECT_URI_UI")
+	auth          = spotifyauth.New(
 		spotifyauth.WithRedirectURL(redirectURI),
 		spotifyauth.WithScopes(spotifyauth.ScopePlaylistModifyPrivate, spotifyauth.ScopePlaylistModifyPublic),
 	)
