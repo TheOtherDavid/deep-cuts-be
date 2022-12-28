@@ -132,6 +132,7 @@ func generateDeepCutPlaylist() func(w http.ResponseWriter, r *http.Request) {
 func getPlaylist() func(w http.ResponseWriter, r *http.Request) {
 	return func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Access-Control-Allow-Origin", "*")
+		log.Println("Assigned Access Control Header.")
 
 		tokenHeader := r.Header.Get("Authorization")
 		if tokenHeader == "" {
