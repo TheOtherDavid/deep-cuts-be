@@ -407,6 +407,7 @@ func cors() func(w http.ResponseWriter, r *http.Request) {
 }
 
 func handleRequests() {
+	log.Println("Creating Router")
 	myRouter := mux.NewRouter().StrictSlash(true)
 	myRouter.HandleFunc("/callback", spot.CompleteAuth)
 	myRouter.HandleFunc("/health", health()).Methods("GET")
