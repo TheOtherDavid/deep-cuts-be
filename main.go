@@ -351,7 +351,9 @@ func findAcceptableTracks(potentialTracks []spotify.SimpleTrack, forbiddenTracks
 
 func getSpotifyToken() func(w http.ResponseWriter, r *http.Request) {
 	return func(w http.ResponseWriter, r *http.Request) {
+		log.Println("Beginning Get Token function.")
 		w.Header().Set("Access-Control-Allow-Origin", "*")
+
 		codes, ok := r.URL.Query()["code"]
 
 		if !ok || len(codes[0]) < 1 {
