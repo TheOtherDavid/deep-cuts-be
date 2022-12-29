@@ -39,6 +39,7 @@ func respondWithJSON(w http.ResponseWriter, code int, payload interface{}) {
 
 func generateDeepCutPlaylist() func(w http.ResponseWriter, r *http.Request) {
 	return func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Access-Control-Allow-Origin", "*")
 		tokenHeader := r.Header.Get("Authorization")
 		if tokenHeader == "" {
 			http.Error(w, "Couldn't get playlist ID from request.", http.StatusForbidden)
@@ -119,8 +120,6 @@ func generateDeepCutPlaylist() func(w http.ResponseWriter, r *http.Request) {
 
 		defer r.Body.Close()
 		fmt.Println("Returning response to GeneratePlaylist.")
-
-		w.Header().Set("Access-Control-Allow-Origin", "*")
 		w.WriteHeader(http.StatusCreated)
 
 		json.NewEncoder(w).Encode(playlistTracks)
@@ -172,6 +171,7 @@ func getPlaylist() func(w http.ResponseWriter, r *http.Request) {
 		defer r.Body.Close()
 
 		fmt.Println("Returning response to GetPlaylist.")
+
 		w.WriteHeader(http.StatusOK)
 
 		json.NewEncoder(w).Encode(playlistTracks)
@@ -347,6 +347,7 @@ func findAcceptableTracks(potentialTracks []spotify.SimpleTrack, forbiddenTracks
 
 func getSpotifyToken() func(w http.ResponseWriter, r *http.Request) {
 	return func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Access-Control-Allow-Origin", "*")
 		log.Println("Beginning Get Token function.")
 
 		codes, ok := r.URL.Query()["code"]
@@ -387,6 +388,7 @@ func health() func(w http.ResponseWriter, r *http.Request) {
 		response := healthCheckResponse{
 			Status: "Ok",
 		}
+		w.Header().Set("Access-Control-Allow-Origin", "*")
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
 		json.NewEncoder(w).Encode(response)
